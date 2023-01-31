@@ -60,8 +60,11 @@ def getSeason():
 
 
 def updateCSV(df: pandas.DataFrame):
-    #append csv file
-    
+    """
+    Update CSV file with new data
+        args:
+            df: pandas.DataFrame
+    """    
     #write header if file is empty
     todayDate = datetime.datetime.now().strftime('%Y-%m-%d')
     if not os.path.exists(OUTPUT_FILE.replace('.csv', f'_{todayDate}' + '.csv')):
@@ -141,11 +144,17 @@ def getBoxScore(soup: bs, url: str):
     try:
         table = soup.find('div', {'id': 'div_schedule'}).find('table').find('tbody')
         for row in table.find_all('tr', class_=False):
-            boxScore = row.find('td', {'data-stat': 'box_score_text'})
-            if boxScore:
-                awayTeam = row.find('td', {'data-stat': 'visitor_team_name'}).get_text()
-                homeTeam = row.find('td', {'data-stat': 'home_team_name'}).get_text()
-                yield BASE_URL + boxScore.find('a').get('href'), awayTeam, homeTeam
+            try:
+                boxScore = row.find('td', {'data-stat': 'box_score_text'})
+                if boxScore:
+                    awayTeam = row.find('td', {'data-stat': 'visitor_team_name'}).get_text()
+                    homeTeam = row.find('td', {'data-stat': 'home_team_name'}).get_text()
+                    yield BASE_URL + boxScore.find('a').get('href'), awayTeam, homeTeam
+            except Exception as e:
+                # Print out row index
+                print("Error in [getBoxScore] - row", awayTeam, homeTeam, "Not Found")
+                print(e)
+                continue
     except Exception as e:
         print("Error in [getBoxScore]", url)
         print(e)
@@ -154,6 +163,14 @@ def getBoxScore(soup: bs, url: str):
 
 
 def dfHandler(list_dfs: list[pandas.DataFrame]) -> pandas.DataFrame:
+    """
+    Reservers players will be in a different table that has "Reserves" in the header\n
+    This function will merge the two tables and add a column "LineUp" to indicate if the player is a starter or reserve\n
+        args:
+            list_dfs: list of dataframes
+        returns:
+            df: single dataframe
+    """
 
     for i, df in enumerate(list_dfs):
         df = df.reset_index(drop=True)
@@ -187,6 +204,17 @@ def dfHandler(list_dfs: list[pandas.DataFrame]) -> pandas.DataFrame:
     return merged_df
 
 def parseBoxScore(soup: bs, url: str, awayTeam: str, homeTeam: str, season: str, playoff: bool = False):
+    """
+    Parses box score and returns a pandas dataframe
+        args:
+            soup: bs object
+            url: url of box score
+            awayTeam: away team name
+            homeTeam: home team name
+            season: season of game
+            playoff: if game is playoff game
+
+    """
 
     # get date
     date = soup.find('div', {'class': 'scorebox_meta'}).find('div')
@@ -247,9 +275,6 @@ def parseBoxScore(soup: bs, url: str, awayTeam: str, homeTeam: str, season: str,
         #add opponent column
         df['Opponent'] = ''
 
-        #add season
-        df['Season'] = season
-
         if teamName == homeTeam:
             df['Home Team'] = True
             df['Opponent'] = awayTeam
@@ -274,8 +299,13 @@ def parseBoxScore(soup: bs, url: str, awayTeam: str, homeTeam: str, season: str,
 
         if playoff:
             df['Playoff'] = True
+            # If playoff, season is the year before the season
+            # Example Season 2022, Playoff 2021-22
+            df['Season'] = str(int(season) - 1) + "-" + season[-2:]
         else:
             df['Playoff'] = False
+            #add season
+            df['Season'] = season
 
         updateCSV(df)
             
@@ -432,7 +462,7 @@ def seasonURL(date: datetime.datetime) -> list:
     """
     #Example: 2023
     url = 'https://www.basketball-reference.com/leagues/NBA_{}_games-{}.html'
-    months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+    months = ['october', 'november', 'december', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september']
     urls = []
     #===========================
     #generate urls until current date
@@ -440,13 +470,16 @@ def seasonURL(date: datetime.datetime) -> list:
     #return -> all months until current date (01-20-2023)
     #===========================
     today = datetime.datetime.now()
-    todayMonth = today.month
+    todayMonth = today.strftime('%B').lower()
     
     for year in range(date.year, today.year + 1):
         if year == today.year:
             #if current year, only generate until current month
-            for month in months[:todayMonth]:
+            # for month in months[:todayMonth]:
+            for month in months:
                 urls.append(url.format(year, month))
+                if month == todayMonth:
+                    break
         elif year == date.year:
             #if start year, only generate from start month
             for month in months[months.index(date.strftime('%B').lower()):]:
@@ -470,8 +503,7 @@ def processFromDate(season: str, date: datetime.datetime, playoff: bool = False)
     # startURL = 'https://www.basketball-reference.com/leagues/NBA_{}_games-{}.html'.format(season, date.strftime('%B').lower())
 
     #Get all urls from start date
-    # urls = seasonURL(season)[seasonURL(season).index(startURL):]
-    urls = seasonURL(season)
+    urls = seasonURL(date)
     return urls
 
 if __name__ == "__main__":
@@ -507,7 +539,17 @@ if __name__ == "__main__":
     # Test processFromDate()
     print("=====================================================")
     print("Example: 10-01-2022 will scrape season 2022-2023 from October 2022")
-    date = datetime.datetime.strptime(input("Input start date (MM-DD-YYYY): "), '%m-%d-%Y')
+    try:
+        date = datetime.datetime.strptime(input("Input start date (MM-DD-YYYY): "), '%m-%d-%Y')
+    except ValueError:
+        print("Invalid Date")
+        exit()
+    except KeyboardInterrupt:
+        print("Keyboard Interrupt")
+        exit()
+    except Exception as e:
+        print("Error in [main]: ", e)
+        exit()
     choice = input("Playoff? (y/n): ")
     if choice.lower().strip() == 'y':
         print(processFromDate(str(date.year), date, True))

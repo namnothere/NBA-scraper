@@ -5,14 +5,14 @@ import pandas as pd
 # df2 = pd.read_csv('BoxScore_Part2c.csv')
 # df3 = pd.read_csv('BoxScore_Part3c.csv')
 # df = pd.read_csv('cleanedBoxScore.csv')
-df = pd.read_csv('BoxScore_regular_2023-01-20.csv')
+df = pd.read_csv('BoxScore__2023-01-31.csv')
 
 # Concat the dataframes
 # df = pd.concat([df1, df2, df3], ignore_index=True)
 
 # Duplicate columns will be saved in another csv file
 # df[df.duplicated()].to_csv('duplicate.csv', index=False)
-
+# January 30, 2023
 # Count the number of duplicate columns
 # print(df.duplicated().sum())
 
@@ -43,7 +43,13 @@ df = df[cols]
 # df = df[df['Date'] < '2022-10-18'] 
 # df = df[df['Date'] > '2015-04-01']
 
+# Drop row that seasons is 2021-22
+# df = df[df['Season'] != '2021-22']
+
+# Drop row that not playoff
+df = df[df['Playoff'] == True]
+
 # Write the dataframe to a new csv file
-df.to_csv('BoxScore_Without_InactivePlayer.csv', index=False)
+df.to_csv('BoxScorePlayoff_Without_InactivePlayer.csv', index=False)
 
 # Path: mergecsv.py
